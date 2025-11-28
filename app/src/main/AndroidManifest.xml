@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 🌐 Permissões gerais -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- 📍 Permissões de localização -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!--
+        Só use ACCESS_BACKGROUND_LOCATION se um dia você realmente precisar
+        rastrear localização em segundo plano sem serviço em primeiro plano.
+        Por enquanto, vamos deixar comentado.
+    -->
+    <!-- <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" /> -->
+
+    <!-- 🔔 Permissões de notificação (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- ⚙️ Serviço em primeiro plano -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- 🔋 Manter CPU acordado durante rota (GPS ativo) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- 📴 Receber evento de boot (para futuro, restaurar rota após reinício) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 📷 Câmera para leitura de QR Code -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+
+    <!-- 🎙️ Áudio para reconhecimento de voz -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- 💳 Billing (deixado comentado por enquanto) -->
+    <!-- <uses-permission android:name="com.android.vending.BILLING" /> -->
+
+    <!-- 🔎 Consultas a outros apps (Android 11+): Waze e Google Maps -->
+    <queries>
+        <!-- Google Maps -->
+        <package android:name="com.google.android.apps.maps" />
+        <!-- Waze -->
+        <package android:name="com.waze" />
+
+        <!-- Intents gerais de VIEW com https (abrir links em browser/mapas) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".RotaRapidaApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.RotaRapida">
+
+        <!-- 📷 Tela de leitura de QR Code -->
+        <activity
+            android:name=".presentation.view.scanner.QRScannerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- 📥 Importação de planilhas (XLSX / XLS / CSV / TSV) -->
+        <activity
+            android:name=".presentation.view.importacao.ImportRouteActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+
+            <!--
+                Permite: "Abrir com Rota Rápida" a partir de:
+                - WhatsApp
+                - Google Drive
+                - E-mail
+                - Arquivos do sistema
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                <data android:mimeType="application/vnd.ms-excel" />
+                <data android:mimeType="text/csv" />
+                <data android:mimeType="text/tab-separated-values" />
+                <data android:mimeType="text/comma-separated-values" />
+            </intent-filter>
+        </activity>
+
+        <!-- 🌐 Handler dedicado para navegação externa (Waze / Maps)
+             Por enquanto só declarado; depois a gente implementa a lógica.
+        -->
+        <activity
+            android:name=".navigation.ExternalNavigationHandlerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Transparent" />
+
+        <!-- 🚀 Activity principal -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.RotaRapida">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 🛰️ Serviço de localização (FGS de rota) -->
+        <service
+            android:name=".data.location.LocationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- 🔄 Receiver de boot (DEIXADO COMENTADO POR ENQUANTO)
+             Ativa quando você tiver lógica de restaurar rota / agendar jobs.
+        -->
+        <!--
+        <receiver
+            android:name=".core.boot.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        -->
+
+        <!-- 📂 FileProvider (comentado até criarmos res/xml/file_paths.xml)
+             Quando for exportar/compartilhar arquivos, a gente ativa.
+        -->
+        <!--
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        -->
+
+        <!-- 💳 Activity de Billing (futuro, quando formos cobrar plano) -->
+        <!--
+        <activity
+            android:name=".billing.BillingActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        -->
+
+        <!-- 🔐 Configurações do Google Play Services / Sign-In -->
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+
+        <meta-data
+            android:name="com.google.android.gms.client_id"
+            android:value="@string/default_web_client_id" />
+
+        <!-- 🔑 Chave da API de mapas -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="SUA_API_KEY_AQUI" />
+
+    </application>
+</manifest>
