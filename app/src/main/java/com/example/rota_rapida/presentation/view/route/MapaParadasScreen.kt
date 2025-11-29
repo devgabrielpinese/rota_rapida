@@ -10,7 +10,6 @@ import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -53,18 +52,25 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
-import org.maplibre.android.plugins.annotation.Symbol
 import org.maplibre.android.plugins.annotation.SymbolManager
 import org.maplibre.android.plugins.annotation.SymbolOptions
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MapaParadasScreen(viewModel: RouteSharedViewModel = hiltViewModel()) {
+fun MapaParadasScreen(
+        viewModel: RouteSharedViewModel = hiltViewModel(),
+        navController: androidx.navigation.NavController? = null
+) {
+
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+
+    var paradaSelecionada by remember { mutableStateOf<String?>(null) }
+    var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
 
     var showCopyDialog by remember { mutableStateOf(false) }
     var showRemoveDialog by remember { mutableStateOf(false) }
@@ -81,6 +87,7 @@ fun MapaParadasScreen(viewModel: RouteSharedViewModel = hiltViewModel()) {
                 is RouteUiEvent.ShowMessage -> snackbar.showSnackbar(ev.message)
                 is RouteUiEvent.ShowError -> snackbar.showSnackbar(ev.message)
                 is RouteUiEvent.ShareFile -> {
+                    // AÇÃO NÃO ESTÁ MAIS SENDO CHAMADA PELO MENU
                     val intent =
                             Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
@@ -90,6 +97,7 @@ fun MapaParadasScreen(viewModel: RouteSharedViewModel = hiltViewModel()) {
                     context.startActivity(Intent.createChooser(intent, "Compartilhar rota"))
                 }
                 is RouteUiEvent.PrintFile -> {
+                    // AÇÃO NÃO ESTÁ MAIS SENDO CHAMADA PELO MENU
                     val intent =
                             Intent(Intent.ACTION_VIEW).apply {
                                 setDataAndType(ev.uri, "text/plain")
@@ -132,78 +140,96 @@ fun MapaParadasScreen(viewModel: RouteSharedViewModel = hiltViewModel()) {
         )
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = Color.Transparent) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad)) {
-            Column(Modifier.fillMaxSize()) {
-
-                // MAPA (50%)
-                Box(Modifier.fillMaxWidth().weight(1f)) {
-                    MapaContent(
-                            context = context,
-                            uiState = uiState,
-                            paradaSelecionada = paradaSelecionada,
-                            onMapReady = { mapRef = it },
-                            onMarkerClick = { id ->
-                                paradaSelecionada = id
-                                val idx = uiState.paradas.indexOfFirst { it.id == id }
-                                if (idx != -1) scope.launch { listState.animateScrollToItem(idx) }
-                            }
-                    )
-
-                    IconButton(
-                            onClick = {
-                                scope.launch {
-                                    snackbar.showSnackbar("Menu lateral ainda não implementado")
-                                }
-                            },
-                            modifier =
-                                    Modifier.align(Alignment.TopStart)
-                                            .padding(16.dp)
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                    MaterialTheme.colorScheme.surface.copy(
-                                                            alpha = 0.9f
-                                                    )
-                                            )
-                    ) { Icon(Icons.Default.Menu, contentDescription = "Menu") }
-                }
-
-                // LISTA (50%)
-                Box(Modifier.fillMaxWidth().weight(1f)) {
-                    ListaParadas(
-                            paradas = uiState.paradas,
-                            listState = listState,
-                            onToggleStatus = { p ->
-                                val novo =
-                                        if (p.status == StatusParada.ENTREGUE) StatusParada.PENDENTE
-                                        else StatusParada.ENTREGUE
-                                viewModel.atualizarStatusParada(p.id, novo)
-                            },
-                            onSelectParada = { p ->
-                                paradaSelecionada = p.id
-                                if (p.latitude != null && p.longitude != null) {
-                                    mapRef?.animateCamera(
-                                            CameraUpdateFactory.newLatLngZoom(
-                                                    LatLng(p.latitude, p.longitude),
-                                                    15.0
-                                            )
-                                    )
-                                }
-                            }
-                    )
-                }
+    com.example.rota_rapida.presentation.view.components.RotaRapidaDrawer(
+            drawerState = drawerState,
+            onNavigateToSettings = {
+                scope.launch { drawerState.close() }
+                navController?.navigate(
+                        com.example.rota_rapida.presentation.ui.navigation.NavigationRoutes
+                                .CONFIGURACOES
+                )
+            },
+            onNavigateToCreateRoute = {
+                scope.launch { drawerState.close() }
+                navController?.navigate(
+                        com.example.rota_rapida.presentation.ui.navigation.NavigationRoutes
+                                .CRIAR_ROTA
+                )
             }
+    ) {
+        Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = Color.Transparent) {
+                pad ->
+            Box(Modifier.fillMaxSize().padding(pad)) {
+                Column(Modifier.fillMaxSize()) {
 
-            // BARRA CIRCUIT
-            CircuitActionBar(
-                    modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp),
-                    viewModel = viewModel,
-                    snackbarHostState = snackbar
-            )
+                    // MAPA (50%)
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        MapaContent(
+                                context = context,
+                                uiState = uiState,
+                                paradaSelecionada = paradaSelecionada,
+                                onMapReady = { mapRef = it },
+                                onMarkerClick = { id ->
+                                    paradaSelecionada = id
+                                    val idx = uiState.paradas.indexOfFirst { it.id == id }
+                                    if (idx != -1) {
+                                        scope.launch { listState.animateScrollToItem(idx) }
+                                    }
+                                }
+                        )
 
-            if (uiState.isLoading) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center))
+                        IconButton(
+                                onClick = { scope.launch { drawerState.open() } },
+                                modifier =
+                                        Modifier.align(Alignment.TopStart)
+                                                .padding(16.dp)
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                        MaterialTheme.colorScheme.surface.copy(
+                                                                alpha = 0.9f
+                                                        )
+                                                )
+                        ) { Icon(Icons.Default.Menu, contentDescription = "Menu") }
+                    }
+
+                    // LISTA (50%)
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        ListaParadas(
+                                paradas = uiState.paradas,
+                                listState = listState,
+                                onToggleStatus = { p ->
+                                    val novo =
+                                            if (p.status == StatusParada.ENTREGUE)
+                                                    StatusParada.PENDENTE
+                                            else StatusParada.ENTREGUE
+                                    viewModel.atualizarStatusParada(p.id, novo)
+                                },
+                                onSelectParada = { p ->
+                                    paradaSelecionada = p.id
+                                    if (p.latitude != null && p.longitude != null) {
+                                        mapRef?.animateCamera(
+                                                CameraUpdateFactory.newLatLngZoom(
+                                                        LatLng(p.latitude, p.longitude),
+                                                        15.0
+                                                )
+                                        )
+                                    }
+                                }
+                        )
+                    }
+                }
+
+                // BARRA CIRCUIT
+                CircuitActionBar(
+                        modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp),
+                        viewModel = viewModel,
+                        snackbarHostState = snackbar
+                )
+
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                }
             }
         }
     }
@@ -296,16 +322,21 @@ fun CircuitActionBar(
                     }
             ) { Icon(Icons.Default.Mic, null) }
 
+            // MENU AJUSTADO: sem compartilhar / imprimir, reotimizar só mostra aviso
             MoreOptionsMenu(
-                    onShareCopyRoute = { viewModel.shareRoute() },
                     onCopyStops = { viewModel.loadRoutesForCopy() },
-                    onReoptimizeRoute = { viewModel.optimizeRoute() },
+                    onReoptimizeRoute = {
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                    "Reotimização da rota será feita por último."
+                            )
+                        }
+                    },
                     onImportSpreadsheet = {
                         planilhaLauncher.launch(
                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
                     },
-                    onPrintRoute = { viewModel.printRoute() },
                     onRemoveStops = { viewModel.openRemoveDialog() }
             )
         }
@@ -345,6 +376,7 @@ fun MapaContent(
                     onMapReady(mapLibre)
 
                     if (symbolManager != null) {
+
                         scope.launch {
                             renderMarkersAndCamera(
                                     mapLibre,
@@ -355,6 +387,7 @@ fun MapaContent(
                             )
                         }
                     } else {
+
                         mapLibre.setStyle(Style.Builder().fromUri(MapUtils.STADIA_STYLE_URL)) {
                                 style ->
                             style.addImage("marker-default", makeMarker(context))
@@ -394,147 +427,60 @@ private fun renderMarkersAndCamera(
         paradaSelecionada: String?,
         ids: MutableMap<Long, String>
 ) {
+
     sm.deleteAll()
     ids.clear()
 
-    val bounds = LatLngBounds.Builder()
-    val markers = mutableListOf<Symbol>()
+    val paradas = uiState.paradas
+    if (paradas.isEmpty()) return
 
-    uiState.paradas.forEach { p ->
-        val latLng =
-                LatLng(
-                        p.latitude ?: MapUtils.SAO_PAULO_CENTER.latitude,
-                        p.longitude ?: MapUtils.SAO_PAULO_CENTER.longitude
-                )
+    val boundsBuilder = LatLngBounds.Builder()
 
-        val marker =
-                sm.create(
-                        SymbolOptions()
-                                .withLatLng(latLng)
-                                .withIconImage("marker-default")
-                                .withIconSize(if (p.id == paradaSelecionada) 1.3f else 1f)
-                )
+    paradas.forEach { p ->
+        if (p.latitude != null && p.longitude != null) {
 
-        ids[marker.id] = p.id
-        markers.add(marker)
-        bounds.include(latLng)
+            val opts =
+                    SymbolOptions()
+                            .withLatLng(LatLng(p.latitude, p.longitude))
+                            .withIconImage("marker-default")
+                            .withIconSize(1.2f)
+
+            val symbol = sm.create(opts)
+            ids[symbol.id] = p.id
+
+            boundsBuilder.include(LatLng(p.latitude, p.longitude))
+        }
     }
 
-    if (markers.isNotEmpty() && paradaSelecionada == null) {
-        map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds.build(), 100))
-    } else if (markers.isEmpty()) {
-        map.animateCamera(CameraUpdateFactory.newLatLngZoom(MapUtils.SAO_PAULO_CENTER, 12.0))
-    }
+    try {
+        val bounds = boundsBuilder.build()
+        map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 120), 1200)
+    } catch (_: Exception) {}
 }
 
-private fun makeMarker(context: Context, dpSize: Float = 30f): Bitmap {
-    val px = (dpSize * context.resources.displayMetrics.density).toInt()
-    val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-    val c = Canvas(bmp)
+private fun makeMarker(context: Context): Bitmap {
 
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.parseColor("#1976D2") }
+    val size = 48
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
 
-    val stroke =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val fillPaint =
+            Paint().apply {
+                color = AndroidColor.parseColor("#1976D2")
+                isAntiAlias = true
+            }
+
+    val strokePaint =
+            Paint().apply {
                 color = AndroidColor.WHITE
                 style = Paint.Style.STROKE
                 strokeWidth = 4f
+                isAntiAlias = true
             }
 
-    val radius = px / 2f
-    c.drawCircle(radius, radius, radius - 4f, fill)
-    c.drawCircle(radius, radius, radius - 4f, stroke)
+    val radius = size / 2f
+    canvas.drawCircle(radius, radius, radius - 4f, fillPaint)
+    canvas.drawCircle(radius, radius, radius - 4f, strokePaint)
 
-    return bmp
-}
-
-@Composable
-fun CopyStopsDialog(
-        routes: List<com.example.rota_rapida.domain.model.Rota>,
-        onDismiss: () -> Unit,
-        onConfirm: (com.example.rota_rapida.domain.model.Rota) -> Unit
-) {
-    AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Copiar paradas para...") },
-            text = {
-                androidx.compose.foundation.lazy.LazyColumn {
-                    items(routes.size) { i ->
-                        val rota = routes[i]
-                        TextButton(
-                                onClick = { onConfirm(rota) },
-                                modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(rota.nome, modifier = Modifier.weight(1f))
-                            Text("${rota.paradas.size} paradas", fontSize = 12.sp)
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
-    )
-}
-
-@Composable
-fun RemoveStopsDialog(
-        paradas: List<com.example.rota_rapida.domain.model.Parada>,
-        onDismiss: () -> Unit,
-        onConfirm: (List<String>) -> Unit
-) {
-    val selectedIds = remember { mutableStateListOf<String>() }
-
-    AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Remover paradas") },
-            text = {
-                Column {
-                    Button(
-                            onClick = {
-                                val concluidas =
-                                        paradas.filter { it.status == StatusParada.ENTREGUE }.map {
-                                            it.id
-                                        }
-                                selectedIds.clear()
-                                selectedIds.addAll(concluidas)
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                    ) { Text("Selecionar concluídas") }
-
-                    androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 300.dp)) {
-                        items(paradas.size) { i ->
-                            val p = paradas[i]
-                            Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier =
-                                            Modifier.fillMaxWidth()
-                                                    .clickable {
-                                                        if (selectedIds.contains(p.id))
-                                                                selectedIds.remove(p.id)
-                                                        else selectedIds.add(p.id)
-                                                    }
-                                                    .padding(vertical = 4.dp)
-                            ) {
-                                Checkbox(
-                                        checked = selectedIds.contains(p.id),
-                                        onCheckedChange = { chk ->
-                                            if (chk) selectedIds.add(p.id)
-                                            else selectedIds.remove(p.id)
-                                        }
-                                )
-                                Text(
-                                        p.endereco,
-                                        maxLines = 1,
-                                        modifier = Modifier.weight(1f),
-                                        fontSize = 14.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { onConfirm(selectedIds.toList()) }) { Text("Remover") }
-            },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
-    )
+    return bitmap
 }

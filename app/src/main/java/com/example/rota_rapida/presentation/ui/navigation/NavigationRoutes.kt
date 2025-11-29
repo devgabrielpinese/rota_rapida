@@ -2,8 +2,8 @@
 package com.example.rota_rapida.presentation.ui.navigation
 
 /**
- * Objeto que contém todas as rotas de navegação do app.
- * Centraliza as strings de rota para evitar erros de digitação.
+ * Objeto que contém todas as rotas de navegação do app. Centraliza as strings de rota para evitar
+ * erros de digitação.
  */
 object NavigationRoutes {
     const val TELA_INICIAL = "tela_inicial"
@@ -14,6 +14,7 @@ object NavigationRoutes {
     const val CONFIGURACOES = "configuracoes"
     const val PERFIL = "perfil"
     const val HISTORICO = "historico"
+    const val PREFERENCIAS_ROTA = "configuracoes/preferencias_rota"
 
     // Rotas com argumentos
     fun mapaParadasComRota(rotaId: String) = "$MAPA_PARADAS/$rotaId"
